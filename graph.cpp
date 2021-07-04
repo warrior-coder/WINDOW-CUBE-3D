@@ -1,5 +1,6 @@
 #include "graph.h"
 
+// -+-+-+-+-+-+-+-+-+-+- FRAME -+-+-+-+-+-+-+-+-+-+-
 FRAME::FRAME(short frameWidth, short frameHeight, HWND frameHwnd)
 {
     width = frameWidth;
@@ -17,9 +18,9 @@ FRAME::FRAME(short frameWidth, short frameHeight, HWND frameHwnd)
     tmpDc = CreateCompatibleDC(hdc);
 
     pen_color = {};
-    camera = { 200.0f, 200.0f, 350.0f };
 
-    TAN_HALF_FOV = width / 2 / camera.z;
+    CAMERA = { 200.0f, 200.0f, 300.0f };
+    TAN_HALF_FOV = width / 2 / CAMERA.z;
 }
 FRAME::~FRAME()
 {
@@ -296,8 +297,7 @@ void FRAME::save(const char* fname)
         fclose(fp);
     }
 }
-
-iVECT2 FRAME::vect_projection(fVECT3 vect3)
+VECT2 FRAME::vect_projection(VECT3 vect3)
 {
     if (vect3.z == 0)
     {
@@ -305,22 +305,174 @@ iVECT2 FRAME::vect_projection(fVECT3 vect3)
     }
     else if (vect3.z > 0)
     {
-        iVECT2 vect2;
-        float k = (width / 2) / ((camera.z + vect3.z) * TAN_HALF_FOV);
+        VECT2 vect2;
+        float k = (width / 2) / ((CAMERA.z + vect3.z) * TAN_HALF_FOV);
 
-        vect2.x = camera.x + (vect3.x - camera.x) * k;
-        vect2.y = camera.y + (vect3.y - camera.y) * k;
+        vect2.x = CAMERA.x + (vect3.x - CAMERA.x) * k;
+        vect2.y = CAMERA.y + (vect3.y - CAMERA.y) * k;
 
         return vect2;
     }
     else
     {
-        iVECT2 vect2;
-        float k = (width / 2) / ((camera.z - vect3.z) * TAN_HALF_FOV);
+        VECT2 vect2;
+        float k = (width / 2) / ((CAMERA.z - vect3.z) * TAN_HALF_FOV);
 
-        vect2.x = camera.x + (vect3.x - camera.x) / k;
-        vect2.y = camera.y + (vect3.y - camera.y) / k;
+        vect2.x = CAMERA.x + (vect3.x - CAMERA.x) / k;
+        vect2.y = CAMERA.y + (vect3.y - CAMERA.y) / k;
 
         return vect2;
+    }
+}
+void FRAME::set_figure(FIGURE& figure)
+{
+    // Make projections on frame
+    for (short i = 0; i < figure.num_vert; i++)
+    {
+        figure.vert_proj[i] = vect_projection(figure.vertexes[i]);
+    }
+
+    // Draw edges
+    for (short i = 0; i < figure.num_edg; i++)
+    {
+        set_line(figure.vert_proj[figure.edges[i].begin].x, figure.vert_proj[figure.edges[i].begin].y, figure.vert_proj[figure.edges[i].end].x, figure.vert_proj[figure.edges[i].end].y);
+    }
+
+    // Draw vertexes
+    for (short i = 0; i < figure.num_vert; i++)
+    {
+        set_circle(figure.vert_proj[i].x, figure.vert_proj[i].y, 5);
+    }
+}
+
+// -+-+-+-+-+-+-+-+-+-+- GLOBAL FUNC -+-+-+-+-+-+-+-+-+-+-
+void vect_rotate(VECT3& vect3, float angle_x, float angle_y, float angle_z, float rot_x, float rot_y, float rot_z)
+{
+    /*
+    float Mx[3][3] = 
+    {
+        { 1,               0,                0 },
+        { 0, cos(RAD(angle)), -sin(RAD(angle)) },
+        { 0, sin(RAD(angle)),  cos(RAD(angle)) }
+    }
+    float My[3][3] =
+    {
+        {  cos(RAD(angle)), 0, sin(RAD(angle)) },
+        {                0, 1,               0 },
+        { -sin(RAD(angle)), 0, cos(RAD(angle)) }
+    }
+    float Mz[3][3] =
+    {
+        { cos(RAD(angle)), -sin(RAD(angle)), 0 },
+        { sin(RAD(angle)), cos(RAD(angle)),  0 },
+        { 0,               0,                1 }
+    }
+    */
+
+    vect3.x -= rot_x;
+    vect3.y -= rot_y;
+    vect3.z -= rot_z;
+
+    float x, y, z;
+
+    if (angle_x)
+    {
+        angle_x = RAD(angle_x);
+        y = vect3.y;
+        z = vect3.z;
+
+        vect3.y = cos(angle_x) * y - sin(angle_x) * z;
+        vect3.z = sin(angle_x) * y + cos(angle_x) * z;
+    }
+    if (angle_y)
+    {
+        angle_y = RAD(angle_y);
+        x = vect3.x;
+        z = vect3.z;
+
+        vect3.x =  cos(angle_y) * x + sin(angle_y) * z;
+        vect3.z = -sin(angle_y) * x + cos(angle_y) * z;
+    }
+    if (angle_z)
+    {
+        angle_z = RAD(angle_z);
+        x = vect3.x;
+        y = vect3.y;
+
+        vect3.x = cos(angle_z) * x - sin(angle_z) * y;
+        vect3.y = sin(angle_z) * x + cos(angle_z) * y;
+    }
+
+    vect3.x += rot_x;
+    vect3.y += rot_y;
+    vect3.z += rot_z;
+}
+void vect_translate(VECT3& vect3, float dx, float dy, float dz)
+{
+    vect3.x += dx;
+    vect3.y += dy;
+    vect3.z += dz;
+}
+
+// -+-+-+-+-+-+-+-+-+-+- FIGURE -+-+-+-+-+-+-+-+-+-+-
+FIGURE::FIGURE(const char* fname)
+{
+    FILE* fp;
+
+    // Open file
+    fopen_s(&fp, fname, "rt");
+
+    if (fp)
+    {
+        // Read vertexes
+        fscanf_s(fp, "%d", &num_vert);
+
+        vertexes = new VECT3[num_vert];
+        vert_proj = new VECT2[num_vert];
+
+        for (short i = 0; i < num_vert; i++)
+        {
+            fscanf_s(fp, "%f %f %f", &vertexes[i].x, &vertexes[i].y, &vertexes[i].z);
+        }
+
+        // Read edges
+        fscanf_s(fp, "%d", &num_edg);
+
+        edges = new EDGE[num_edg];
+
+        for (short i = 0; i < num_edg; i++)
+        {
+            fscanf_s(fp, "%d %d", &edges[i].begin, &edges[i].end);
+        }
+
+        // Close file
+        fclose(fp);
+        printf("%s readed.", fname);
+    }
+    else
+    {
+        printf("%s read error.", fname);
+        num_vert = num_edg = 0;
+    }
+}
+FIGURE::~FIGURE()
+{
+    delete[] vertexes;
+    delete[] vert_proj;
+    delete[] edges;
+}
+
+void FIGURE::rotate(float angle_x, float angle_y, float angle_z, float rot_x, float rot_y, float rot_z)
+{
+    for (short i = 0; i < num_vert; i++)
+    {
+        vect_rotate(vertexes[i], angle_x, angle_y, angle_z, rot_x, rot_y, rot_z);
+    }
+}
+void FIGURE::translate(float dx, float dy, float dz)
+{
+    for (short i = 0; i < num_vert; i++)
+    {
+        vect_translate(vertexes[i], dx, dy, dz);
     }
 }

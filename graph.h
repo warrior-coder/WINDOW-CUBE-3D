@@ -16,33 +16,46 @@ using std::endl;
 #define MIN(a, b) ( (a) < (b) ? (a) : (b) )
 #define MAX(a, b) ( (a) > (b) ? (a) : (b) )
 #define PI 3.14159265358979323846
+#define RAD(a) (a * 0.01745329251994329577)
 
 // Define using types
 typedef unsigned char BYTE;
-typedef struct
+typedef struct RGB
 {
-    BYTE R;
-    BYTE G;
-    BYTE B;
-}RGB;
-typedef struct
+    BYTE R, G, B;
+};
+typedef struct RGB4
 {
-    BYTE B;
-    BYTE G;
-    BYTE R;
-    BYTE A;
-}RGB4;
-typedef struct
+    BYTE B, G, R, A;
+};
+typedef struct VECT2
 {
-    int x;
-    int y;
-}iVECT2;
-typedef struct
+    int x, y;
+};
+typedef struct VECT3
 {
-    float x;
-    float y;
-    float z;
-}fVECT3;
+    float x, y, z;
+};
+typedef struct EDGE
+{
+    int begin, end;
+};
+
+class FIGURE
+{
+public:
+    VECT3* vertexes;
+    VECT2* vert_proj;
+    EDGE* edges;
+    int num_vert;
+    int num_edg;
+
+    FIGURE(const char* fname);
+    ~FIGURE();
+
+    void rotate(float angle_x, float angle_y, float angle_z, float rot_x, float rot_y, float rot_z);
+    void translate(float dx, float dy, float dz);
+};
 
 class FRAME
 {
@@ -60,6 +73,10 @@ private:
     // Handle to the bitmap
     HBITMAP hbm = nullptr;
 
+    // Camera position
+    VECT3 CAMERA;
+
+    // Tangens of half field of veiw
     float TAN_HALF_FOV;
 
 public:
@@ -69,9 +86,6 @@ public:
 
     // Pen color
     RGB pen_color;
-
-    // Camera position
-    fVECT3 camera;
 
     FRAME(short frameWidth, short frameHeight, HWND frameHwnd);
     ~FRAME();
@@ -84,8 +98,13 @@ public:
     void set_triangle(int x1, int y1, int x2, int y2, int x3, int y3);
     void print();
     void save(const char* fname);
-    iVECT2 vect_projection(fVECT3 vect3);
-    
+    VECT2 vect_projection(VECT3 vect3);
+    void set_figure(FIGURE& figure);
 };
+
+
+
+void vect_rotate(VECT3& vect3, float angle_x, float angle_y, float angle_z, float rot_x, float rot_y, float rot_z);
+void vect_translate(VECT3& vect3, float dx, float dy, float dz);
 
 #endif
