@@ -21,6 +21,7 @@ FRAME::FRAME(short frameWidth, short frameHeight, HWND frameHwnd)
 
     CAMERA = { 200.0f, 200.0f, 300.0f };
     TAN_HALF_FOV = width / 2 / CAMERA.z;
+
 }
 FRAME::~FRAME()
 {
@@ -324,7 +325,7 @@ VECT2 FRAME::vect_projection(VECT3 vect3)
         return vect2;
     }
 }
-void FRAME::set_figure(FIGURE& figure)
+void FRAME::set_figure_wireframe(FIGURE_WIREFRAME& figure)
 {
     // Make projections on frame
     for (short i = 0; i < figure.num_vert; i++)
@@ -343,6 +344,69 @@ void FRAME::set_figure(FIGURE& figure)
     {
         set_circle(figure.vert_proj[i].x, figure.vert_proj[i].y, 5);
     }
+}
+void FRAME::set_figure_surface(FIGURE_SURFACE& figure)
+{
+    int i, j;
+
+    // Make projections on frame
+    for (i = 0; i < figure.num_vert; i++)
+    {
+        figure.vert_proj[i] = vect_projection(figure.vertexes[i]);
+    }
+
+    // Collect min_tris
+    for (i = 0; i < figure.num_tri; i++)
+    {
+        figure.tri_min_z[i] = MAX(MAX(figure.vertexes[figure.tris[i].one].z, figure.vertexes[figure.tris[i].two].z), figure.vertexes[figure.tris[i].three].z);
+        figure.tri_index[i] = i;
+    }
+
+    // Sort min_tris
+    int i_min;
+    int tmp_i;
+    float tmp_f;
+
+    for (i = 0; i < figure.num_tri-1; i++)
+    {
+        i_min = i;
+
+        for (j = i+1; j < figure.num_tri; j++)
+        {
+            if (figure.tri_min_z[i_min] < figure.tri_min_z[j])
+            {
+                i_min = j;
+            }
+        }
+
+        if (i_min != i)
+        {
+            tmp_i = figure.tri_index[i_min];
+            figure.tri_index[i_min] = figure.tri_index[i];
+            figure.tri_index[i] = tmp_i;
+
+            tmp_f = figure.tri_min_z[i_min];
+            figure.tri_min_z[i_min] = figure.tri_min_z[i];
+            figure.tri_min_z[i] = tmp_f;
+        }
+    }
+
+    // Draw visible surfaces
+    float NORM_C;
+
+    for (j = 0; j < figure.num_tri; j++)
+    {
+        i = figure.tri_index[j];
+
+        NORM_C = figure.is_show_surface(figure.vertexes[figure.tris[i].one].x, figure.vertexes[figure.tris[i].one].y, figure.vertexes[figure.tris[i].one].z, figure.vertexes[figure.tris[i].two].x, figure.vertexes[figure.tris[i].two].y, figure.vertexes[figure.tris[i].two].z, figure.vertexes[figure.tris[i].three].x, figure.vertexes[figure.tris[i].three].y, figure.vertexes[figure.tris[i].three].z);
+        if (NORM_C > 0)
+        {
+            pen_color = { 0, BYTE(255 * NORM_C), 0 };
+
+            set_triangle(figure.vert_proj[figure.tris[i].one].x, figure.vert_proj[figure.tris[i].one].y, figure.vert_proj[figure.tris[i].two].x, figure.vert_proj[figure.tris[i].two].y, figure.vert_proj[figure.tris[i].three].x, figure.vert_proj[figure.tris[i].three].y);
+        }
+    }
+    
 }
 
 // -+-+-+-+-+-+-+-+-+-+- GLOBAL FUNC -+-+-+-+-+-+-+-+-+-+-
@@ -414,8 +478,8 @@ void vect_translate(VECT3& vect3, float dx, float dy, float dz)
     vect3.z += dz;
 }
 
-// -+-+-+-+-+-+-+-+-+-+- FIGURE -+-+-+-+-+-+-+-+-+-+-
-FIGURE::FIGURE(const char* fname)
+// -+-+-+-+-+-+-+-+-+-+- FIGURE WIREFRAME -+-+-+-+-+-+-+-+-+-+-
+FIGURE_WIREFRAME::FIGURE_WIREFRAME(const char* fname)
 {
     FILE* fp;
 
@@ -455,24 +519,110 @@ FIGURE::FIGURE(const char* fname)
         num_vert = num_edg = 0;
     }
 }
-FIGURE::~FIGURE()
+FIGURE_WIREFRAME::~FIGURE_WIREFRAME()
 {
     delete[] vertexes;
     delete[] vert_proj;
     delete[] edges;
 }
-
-void FIGURE::rotate(float angle_x, float angle_y, float angle_z, float rot_x, float rot_y, float rot_z)
+void FIGURE_WIREFRAME::rotate(float angle_x, float angle_y, float angle_z, float rot_x, float rot_y, float rot_z)
 {
     for (short i = 0; i < num_vert; i++)
     {
         vect_rotate(vertexes[i], angle_x, angle_y, angle_z, rot_x, rot_y, rot_z);
     }
 }
-void FIGURE::translate(float dx, float dy, float dz)
+void FIGURE_WIREFRAME::translate(float dx, float dy, float dz)
 {
     for (short i = 0; i < num_vert; i++)
     {
         vect_translate(vertexes[i], dx, dy, dz);
     }
+}
+
+// -+-+-+-+-+-+-+-+-+-+- FIGURE SURFACE -+-+-+-+-+-+-+-+-+-+-
+FIGURE_SURFACE::FIGURE_SURFACE(const char* fname)
+{
+    FILE* fp;
+
+    // Open file
+    fopen_s(&fp, fname, "rt");
+
+    if (fp)
+    {
+        // Read vertexes
+        fscanf_s(fp, "%d", &num_vert);
+
+        vertexes = new VECT3[num_vert];
+        vert_proj = new VECT2[num_vert];
+
+        for (short i = 0; i < num_vert; i++)
+        {
+            fscanf_s(fp, "%f %f %f", &vertexes[i].x, &vertexes[i].y, &vertexes[i].z);
+        }
+
+        // Read tris
+        fscanf_s(fp, "%d", &num_tri);
+
+        tris = new TRI[num_tri];
+        tri_index = new int[num_tri];
+        tri_min_z = new float[num_tri];
+
+        for (short i = 0; i < num_tri; i++)
+        {
+            fscanf_s(fp, "%d %d %d", &tris[i].one, &tris[i].two, &tris[i].three);
+        }
+
+        // Close file
+        fclose(fp);
+        printf("%s readed.\n", fname);
+    }
+    else
+    {
+        printf("%s read error.", fname);
+        num_vert = num_tri = 0;
+    }
+}
+FIGURE_SURFACE::~FIGURE_SURFACE()
+{
+    delete[] vertexes;
+    delete[] vert_proj;
+    delete[] tris;
+}
+void FIGURE_SURFACE::rotate(float angle_x, float angle_y, float angle_z, float rot_x, float rot_y, float rot_z)
+{
+    for (short i = 0; i < num_vert; i++)
+    {
+        vect_rotate(vertexes[i], angle_x, angle_y, angle_z, rot_x, rot_y, rot_z);
+    }
+}
+void FIGURE_SURFACE::translate(float dx, float dy, float dz)
+{
+    for (short i = 0; i < num_vert; i++)
+    {
+        vect_translate(vertexes[i], dx, dy, dz);
+    }
+}
+
+float FIGURE_SURFACE::is_show_surface(float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3)
+{
+    /*
+    float res =
+          (mid.x - x1) * (y2 - y1) * (z3 - z1)
+        + (mid.y - y1) * (z2 - z1) * (x3 - x1)
+        + (mid.z - z1) * (x2 - x1) * (y3 - y1)
+        - (mid.z - z1) * (y2 - y1) * (x3 - x1)
+        - (mid.y - y1) * (x2 - x1) * (z3 - z1)
+        - (mid.x - x1) * (z2 - z1) * (y3 - y1);
+
+    if (res < 0) return true;
+    else return false;
+    */
+
+    float A = ((y2 - y1) * (z3 - z1) - (z2 - z1) * (y3 - y1)) / 1000;
+    float B = ((x2 - x1) * (z3 - z1) - (z2 - z1) * (x3 - x1)) / 1000;
+    float C = ((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1)) / 1000;
+    float r = sqrt(A * A + B * B + C * C);
+
+    return C / r ;
 }

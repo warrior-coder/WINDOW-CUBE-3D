@@ -40,8 +40,32 @@ typedef struct EDGE
 {
     int begin, end;
 };
+typedef struct TRI
+{
+    int one, two, three;
+};
 
-class FIGURE
+class FIGURE_SURFACE
+{
+public:
+    VECT3* vertexes;
+    VECT2* vert_proj;
+    TRI* tris;
+    int* tri_index;
+    float* tri_min_z;
+    int num_vert;
+    int num_tri;
+    VECT3 NORM_VECT;
+
+    FIGURE_SURFACE(const char* fname);
+    ~FIGURE_SURFACE();
+
+    void rotate(float angle_x, float angle_y, float angle_z, float rot_x, float rot_y, float rot_z);
+    void translate(float dx, float dy, float dz);
+    float is_show_surface(float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3);
+};
+
+class FIGURE_WIREFRAME
 {
 public:
     VECT3* vertexes;
@@ -50,8 +74,8 @@ public:
     int num_vert;
     int num_edg;
 
-    FIGURE(const char* fname);
-    ~FIGURE();
+    FIGURE_WIREFRAME(const char* fname);
+    ~FIGURE_WIREFRAME();
 
     void rotate(float angle_x, float angle_y, float angle_z, float rot_x, float rot_y, float rot_z);
     void translate(float dx, float dy, float dz);
@@ -60,32 +84,16 @@ public:
 class FRAME
 {
 private:
-    // Frame buffer
-    RGB4* buffer = nullptr;
+    RGB4* buffer = nullptr; HWND hwnd = nullptr; HDC hdc = nullptr; HDC tmpDc = nullptr; HBITMAP hbm = nullptr;
 
-    // Handle to the window
-    HWND hwnd = nullptr;
-
-    // Handle to the device context
-    HDC hdc = nullptr;
-    HDC tmpDc = nullptr;
-
-    // Handle to the bitmap
-    HBITMAP hbm = nullptr;
-
-    // Camera position
+    // Camera
     VECT3 CAMERA;
 
-    // Tangens of half field of veiw
-    float TAN_HALF_FOV;
+    // Tangent of half field of veiw
+    float TAN_HALF_FOV, HALF_FOV, MIN_NORM_C;
 
 public:
-    // Size of the frame
-    short width;
-    short height;
-
-    // Pen color
-    RGB pen_color;
+    short width; short height; RGB pen_color;
 
     FRAME(short frameWidth, short frameHeight, HWND frameHwnd);
     ~FRAME();
@@ -99,7 +107,8 @@ public:
     void print();
     void save(const char* fname);
     VECT2 vect_projection(VECT3 vect3);
-    void set_figure(FIGURE& figure);
+    void set_figure_wireframe(FIGURE_WIREFRAME& figure);
+    void set_figure_surface(FIGURE_SURFACE& figure);
 };
 
 
